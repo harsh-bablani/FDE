@@ -10,7 +10,13 @@ const queryRoutes = require('./routes/queryRoutes');
 
 const app = express();
 
-app.use(cors());
+// IMPORTANT: Replace 'https://your-frontend-app.vercel.app' with your actual Vercel frontend URL.
+// This is a security measure to ensure only your frontend can talk to your backend.
+app.use(cors({
+  // Allow localhost for local dev and Vercel for production
+  origin: ['http://localhost:5173', 'https://your-frontend-app.vercel.app'],
+  credentials: true
+}));
 app.use(express.json());
 
 app.get('/', (req, res) => {
@@ -44,8 +50,12 @@ async function init() {
   
   console.log(`Graph loaded: ${graphService.nodes.size} nodes, ${graphService.edges.length} edges`);
 
-  app.listen(config.port, () => {
-    console.log(`Server is running on port ${config.port}`);
+  // Render provides the PORT environment variable for production.
+  // Fallback to config.port or 3001 for local development.
+  const PORT = process.env.PORT || config.port || 3001;
+
+  app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
   });
 }
 
