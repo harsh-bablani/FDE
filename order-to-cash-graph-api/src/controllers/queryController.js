@@ -32,10 +32,14 @@ async function handleQuery(req, res) {
     });
   } catch (err) {
     console.error('QUERY ERROR:', err);
-    return res.status(500).json({
+    const message = err && err.message ? err.message : 'LLM failed';
+    const statusCode =
+      message.includes('Missing Gemini API key') ? 503 : 500;
+
+    return res.status(statusCode).json({
       success: false,
       message: 'LLM failed',
-      error: err.message
+      error: message
     });
   }
 }

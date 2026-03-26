@@ -37,7 +37,19 @@ function ChatPanel() {
       }
     } catch (err) {
       console.error('Chat query error:', err);
-      setMessages(prev => [...prev, { role: 'bot', text: 'AI service temporarily unavailable. Please try again later.' }]);
+      const backendError =
+        err?.response?.data?.error ||
+        err?.response?.data?.message ||
+        err?.message;
+      setMessages(prev => [
+        ...prev,
+        {
+          role: 'bot',
+          text: backendError
+            ? `AI service temporarily unavailable. ${backendError}`
+            : 'AI service temporarily unavailable. Please try again later.'
+        }
+      ]);
     } finally {
       setIsLoading(false);
     }
