@@ -12,13 +12,15 @@ function App() {
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('740506'); // Default to a known Sales Order
 
+  const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+
   const fetchGraphData = (query) => {
     setLoading(true);
     setError(null);
     setSelectedNode(null);
     
     // Use the trace endpoint instead of full graph to avoid clutter
-    const endpoint = query ? `http://localhost:3000/api/graph/trace/${query}` : `http://localhost:3000/api/graph/full`;
+    const endpoint = query ? `${API_BASE_URL}/api/graph/trace/${query}` : `${API_BASE_URL}/api/graph/full`;
     
     axios.get(endpoint)
       .then(response => {

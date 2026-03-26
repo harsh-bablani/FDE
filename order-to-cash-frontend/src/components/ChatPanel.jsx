@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
 
 function ChatPanel() {
+  const API_BASE_URL = import.meta.env.VITE_API_URL || '';
   const [messages, setMessages] = useState([
     { role: 'bot', text: 'Hello! You can ask me to trace documents, find top products, or check incomplete orders.' }
   ]);
@@ -26,7 +27,7 @@ function ChatPanel() {
     setIsLoading(true);
 
     try {
-      const response = await axios.post('http://localhost:3000/api/query', { query: userMessage });
+      const response = await axios.post(`${API_BASE_URL}/api/query`, { query: userMessage });
       setMessages(prev => [...prev, { role: 'bot', text: response.data.answer }]);
     } catch (err) {
       console.error(err);
