@@ -1,9 +1,14 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const queryService = require('./queryService');
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+let genAI = null;
+if (GEMINI_API_KEY) {
+  genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+} else {
+  console.warn('GEMINI_API_KEY is not set; LLM requests will use local fallback query service.');
+}
 
-// Define tools mapping natural language to our graph functions
 const tools = [
   {
     functionDeclarations: [
@@ -67,7 +72,52 @@ Your primary job is to help users query sales orders, deliveries, invoices, jour
 2. If the user asks for document details or metrics (like top products), call the appropriate tool.
 3. Synthesize the raw JSON graph data into a natural, easy-to-read summary for the user. Do not expose raw JSON in your final answer unless asked.`;
 
+function parseDocumentId(message) {
+  const match = message.match(/\b(\d{4,14})\b/);
+  return match ? match[1] : null;
+}
+
 async function queryGraphWithLLM(userMessage) {
+  if (!genAI) {
+    const normalized = userMessage.toLowerCase();
+    const docId = parseDocumentId(userMessage);
+
+    if ((normalized.includes('trace') || normalized.includes('flow')) && docId) {
+      const graphDataFetched = queryService.traceDocumentFlow(docId);
+      if (!graphDataFetched || graphDataFetched.nodes.length === 0) {
+        return {
+          answer: `Could not find a document flow for ID ${docId}. Please verify the ID and try again.`,
+          graphDataFetched: null
+        };
+      }
+      return {
+        answer: `Trace result for ${docId}: ${graphDataFetched.nodes.length} nodes and ${graphDataFetched.edges.length} edges found.`,
+        graphDataFetched
+      };
+    }
+
+    if (normalized.includes('top product') || normalized.includes('top products')) {
+      const graphDataFetched = queryService.getTopProducts();
+      return {
+        answer: `Top products by order count: ${graphDataFetched.map(p => `${p.id} (${p.orderCount})`).join(', ')}`,
+        graphDataFetched
+      };
+    }
+
+    if (normalized.includes('incomplete')) {
+      const graphDataFetched = queryService.getIncompleteOrders();
+      return {
+        answer: `Incomplete orders: ${graphDataFetched.map(o => `${o.salesOrder} (${o.status})`).join(', ')}`,
+        graphDataFetched
+      };
+    }
+
+    return {
+      answer: 'LLM is not configured (missing GEMINI_API_KEY) and your request does not match built-in automations. Use a specific phrase like "trace <id>", "top products", or "incomplete orders".',
+      graphDataFetched: null
+    };
+  }
+
   try {
     const model = genAI.getGenerativeModel({
       model: 'gemini-2.5-flash',
