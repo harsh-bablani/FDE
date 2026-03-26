@@ -10,11 +10,14 @@ const queryRoutes = require('./routes/queryRoutes');
 
 const app = express();
 
-// IMPORTANT: Replace 'https://your-frontend-app.vercel.app' with your actual Vercel frontend URL.
-// This is a security measure to ensure only your frontend can talk to your backend.
 app.use(cors({
-  // Allow localhost for local dev and Vercel for production
-  origin: ['http://localhost:5173', 'https://your-frontend-app.vercel.app'],
+  // Allow localhost, Vercel frontend and your Render backend URL
+  origin: [
+    'http://localhost:5173',
+    'https://your-frontend-app.vercel.app',
+    'https://fde-psi.vercel.app',
+    'https://fde-19ao.onrender.com'
+  ],
   credentials: true
 }));
 app.use(express.json());

@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
 
 function ChatPanel() {
-  const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+  const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://fde-19ao.onrender.com';
   const [messages, setMessages] = useState([
     { role: 'bot', text: 'Hello! You can ask me to trace documents, find top products, or check incomplete orders.' }
   ]);
