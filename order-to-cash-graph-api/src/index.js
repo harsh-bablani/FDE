@@ -22,6 +22,8 @@ app.use(cors({
 }));
 app.use(express.json());
 
+console.log('CORS is enabled for frontend domains');
+
 app.get('/', (req, res) => {
   res.send(`
     <h1>Order-to-Cash Graph API</h1>

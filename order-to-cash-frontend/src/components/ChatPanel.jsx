@@ -28,10 +28,16 @@ function ChatPanel() {
 
     try {
       const response = await axios.post(`${API_BASE_URL}/api/query`, { query: userMessage });
-      setMessages(prev => [...prev, { role: 'bot', text: response.data.answer }]);
+
+      if (response.data && response.data.success === false) {
+        const errMsg = response.data.error || response.data.message || 'Unable to process query. Please try again.';
+        setMessages(prev => [...prev, { role: 'bot', text: `Unable to process query. Please try again. (${errMsg})` }]);
+      } else {
+        setMessages(prev => [...prev, { role: 'bot', text: response.data.answer || 'No answer returned.' }]);
+      }
     } catch (err) {
-      console.error(err);
-      setMessages(prev => [...prev, { role: 'bot', text: 'Error connecting to the query service. Please ensure the backend is running.' }]);
+      console.error('Chat query error:', err);
+      setMessages(prev => [...prev, { role: 'bot', text: 'Unable to process query. Please try again.' }]);
     } finally {
       setIsLoading(false);
     }

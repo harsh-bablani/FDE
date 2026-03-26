@@ -1,12 +1,14 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const queryService = require('./queryService');
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const API_KEY = process.env.API_KEY || process.env.GEMINI_API_KEY;
+console.log('API KEY:', API_KEY ? 'SET' : 'MISSING');
+
 let genAI = null;
-if (GEMINI_API_KEY) {
-  genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+if (API_KEY) {
+  genAI = new GoogleGenerativeAI(API_KEY);
 } else {
-  console.warn('GEMINI_API_KEY is not set; LLM requests will use local fallback query service.');
+  console.warn('No API_KEY/GEMINI_API_KEY set; will use local fallback query handling.');
 }
 
 const tools = [
@@ -77,45 +79,69 @@ function parseDocumentId(message) {
   return match ? match[1] : null;
 }
 
-async function queryGraphWithLLM(userMessage) {
-  if (!genAI) {
-    const normalized = userMessage.toLowerCase();
-    const docId = parseDocumentId(userMessage);
+function runLocalQuery(userMessage) {
+  const normalized = userMessage.trim().toLowerCase();
+  const docId = parseDocumentId(userMessage);
 
-    if ((normalized.includes('trace') || normalized.includes('flow')) && docId) {
-      const graphDataFetched = queryService.traceDocumentFlow(docId);
-      if (!graphDataFetched || graphDataFetched.nodes.length === 0) {
-        return {
-          answer: `Could not find a document flow for ID ${docId}. Please verify the ID and try again.`,
-          graphDataFetched: null
-        };
-      }
+  if ((normalized.includes('trace') || normalized.includes('flow')) && docId) {
+    const graphDataFetched = queryService.traceDocumentFlow(docId);
+    if (!graphDataFetched || graphDataFetched.nodes.length === 0) {
       return {
-        answer: `Trace result for ${docId}: ${graphDataFetched.nodes.length} nodes and ${graphDataFetched.edges.length} edges found.`,
-        graphDataFetched
+        success: false,
+        answer: `Could not find a document flow for ID ${docId}. Please verify the ID and try again.`,
+        error: `Document ${docId} not found`,
+        graphDataFetched: null
       };
     }
-
-    if (normalized.includes('top product') || normalized.includes('top products')) {
-      const graphDataFetched = queryService.getTopProducts();
-      return {
-        answer: `Top products by order count: ${graphDataFetched.map(p => `${p.id} (${p.orderCount})`).join(', ')}`,
-        graphDataFetched
-      };
-    }
-
-    if (normalized.includes('incomplete')) {
-      const graphDataFetched = queryService.getIncompleteOrders();
-      return {
-        answer: `Incomplete orders: ${graphDataFetched.map(o => `${o.salesOrder} (${o.status})`).join(', ')}`,
-        graphDataFetched
-      };
-    }
-
     return {
-      answer: 'LLM is not configured (missing GEMINI_API_KEY) and your request does not match built-in automations. Use a specific phrase like "trace <id>", "top products", or "incomplete orders".',
+      success: true,
+      answer: `Trace result for ${docId}: ${graphDataFetched.nodes.length} nodes and ${graphDataFetched.edges.length} edges found.`,
+      graphDataFetched
+    };
+  }
+
+  if (normalized.includes('top product') || normalized.includes('top products')) {
+    const graphDataFetched = queryService.getTopProducts();
+    return {
+      success: true,
+      answer: `Top products by order count: ${graphDataFetched.map(p => `${p.id} (${p.orderCount})`).join(', ')}`,
+      graphDataFetched
+    };
+  }
+
+  if (normalized.includes('incomplete')) {
+    const graphDataFetched = queryService.getIncompleteOrders();
+    return {
+      success: true,
+      answer: `Incomplete orders: ${graphDataFetched.map(o => `${o.salesOrder} (${o.status})`).join(', ')}`,
+      graphDataFetched
+    };
+  }
+
+  return {
+    success: true,
+    answer: 'This system is designed to answer questions related to the provided dataset only.',
+    graphDataFetched: null
+  };
+}
+
+async function queryGraphWithLLM(userMessage) {
+  console.log('queryGraphWithLLM called with:', userMessage);
+
+  if (!userMessage || typeof userMessage !== 'string' || !userMessage.trim()) {
+    return {
+      success: false,
+      error: 'Empty query',
+      answer: 'Please send a non-empty query string.',
       graphDataFetched: null
     };
+  }
+
+  const trimmedQuery = userMessage.trim();
+
+  if (!genAI) {
+    console.log('No LLM key available, using local fallback');
+    return runLocalQuery(trimmedQuery);
   }
 
   try {
@@ -125,20 +151,18 @@ async function queryGraphWithLLM(userMessage) {
       systemInstruction: systemInstruction,
     });
 
-    // Start a chat session, allowing multiple turns if it calls a tool
     const chat = model.startChat();
-    
-    // First round: send the user prompt
-    const result = await chat.sendMessage(userMessage);
+    const result = await chat.sendMessage(trimmedQuery);
     const response = result.response;
-    
-    // Check if the model decided to call a function
+    console.log('LLM model response:', response);
+
     const functionCalls = response.functionCalls();
-    
+
     if (functionCalls && functionCalls.length > 0) {
-      const call = functionCalls[0]; // Take the first tool call
+      const call = functionCalls[0];
+      console.log('LLM selected function call:', call.name, 'args:', call.args);
       let toolResponseData = null;
-      
+
       try {
         if (call.name === 'trace_document_flow') {
           const { documentId } = call.args;
@@ -151,38 +175,61 @@ async function queryGraphWithLLM(userMessage) {
         } else if (call.name === 'get_incomplete_orders') {
           toolResponseData = queryService.getIncompleteOrders();
         } else {
-          throw new Error(`Unknown function: ${call.name}`);
+          return {
+            success: false,
+            answer: 'Unknown tool request from LLM.',
+            error: `Unknown function: ${call.name}`,
+            graphDataFetched: null
+          };
         }
       } catch (err) {
-        toolResponseData = { error: err.message || "Failed to execute backend graph query" };
+        console.error('Tool execution error:', err);
+        return {
+          success: false,
+          answer: 'Failed to execute backend graph query.',
+          error: err.message,
+          graphDataFetched: null
+        };
       }
 
-      // Second round: send the function result back to the model
-      const toolResultObj = [
-        {
-          functionResponse: {
-            name: call.name,
-            response: toolResponseData
-          }
+      const toolResultObj = [{
+        functionResponse: {
+          name: call.name,
+          response: toolResponseData
         }
-      ];
-      
+      }];
+
       const followUpResult = await chat.sendMessage(toolResultObj);
       return {
+        success: true,
         answer: followUpResult.response.text(),
         graphDataFetched: toolResponseData
       };
-      
-    } else {
-      // Model responded directly (either didn't need a tool, or guardrail hit)
-      return {
-        answer: response.text(),
-        graphDataFetched: null
-      };
     }
+
+    // no function call from LLM; plain answer
+    return {
+      success: true,
+      answer: response.text(),
+      graphDataFetched: null
+    };
   } catch (error) {
     console.error('LLM Query Error:', error);
-    throw new Error('Failed to process LLM query: ' + error.message);
+
+    const localFallbackResult = runLocalQuery(trimmedQuery);
+    if (localFallbackResult && localFallbackResult.success) {
+      return {
+        ...localFallbackResult,
+        answer: `${localFallbackResult.answer} (LLM failed; using local fallback.)`
+      };
+    }
+
+    return {
+      success: false,
+      answer: 'Unable to process query right now. Please try again later.',
+      error: error.message,
+      graphDataFetched: null
+    };
   }
 }
 
