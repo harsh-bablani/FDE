@@ -24,32 +24,33 @@ async function handleQuery(req, res) {
   }
 
   try {
-    const result = await llmService.queryGraphWithLLM(query.trim());
-
-    if (!result || result.success === false) {
-      console.error('Query service returned error:', result);
-      return res.status(200).json({
-        success: false,
-        message: 'Error processing query',
-        error: result && result.error ? result.error : 'Unknown query service error'
-      });
-    }
+    const answer = await llmService.askGemini(query.trim());
 
     return res.status(200).json({
       success: true,
-      answer: result.answer,
-      graphData: result.graphDataFetched || null
+      answer
     });
   } catch (err) {
-    console.error('Error in query controller:', err);
+    console.error('QUERY ERROR:', err);
     return res.status(500).json({
       success: false,
-      message: 'Error processing query',
+      message: 'LLM failed',
       error: err.message
     });
   }
 }
 
+async function testGemini(req, res) {
+  try {
+    const test = await llmService.askGemini('Say hello');
+    return res.status(200).json({ success: true, test });
+  } catch (err) {
+    console.error('TEST GEMINI ERROR:', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+}
+
 module.exports = {
-  handleQuery
+  handleQuery,
+  testGemini
 };

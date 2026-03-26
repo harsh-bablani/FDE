@@ -37,7 +37,7 @@ function ChatPanel() {
       }
     } catch (err) {
       console.error('Chat query error:', err);
-      setMessages(prev => [...prev, { role: 'bot', text: 'Unable to process query. Please try again.' }]);
+      setMessages(prev => [...prev, { role: 'bot', text: 'AI service temporarily unavailable. Please try again later.' }]);
     } finally {
       setIsLoading(false);
     }
