@@ -4,9 +4,10 @@ const GEMINI_API_KEY =
   process.env.API_KEY;
 
 const DEFAULT_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
-const MODEL_FALLBACKS = Array.from(
+const PREFERRED_MODELS = Array.from(
   new Set([
     DEFAULT_MODEL,
+    'gemini-2.5-flash',
     'gemini-2.0-flash',
     'gemini-2.0-flash-lite',
     'gemini-1.5-flash-latest',
@@ -14,6 +15,7 @@ const MODEL_FALLBACKS = Array.from(
   ])
 );
 const API_VERSIONS = ['v1', 'v1beta'];
+const modelCache = new Map();
 
 console.log('Gemini key loaded:', Boolean(GEMINI_API_KEY));
 console.log('Gemini default model:', DEFAULT_MODEL);
@@ -56,6 +58,49 @@ async function callGemini(modelName, apiVersion, prompt, apiKey) {
   return text;
 }
 
+async function getCandidateModels(apiKey, apiVersion) {
+  const cacheKey = `${apiVersion}:${apiKey.slice(0, 6)}`;
+  const cached = modelCache.get(cacheKey);
+  const now = Date.now();
+  if (cached && now - cached.timestamp < 10 * 60 * 1000) {
+    return cached.models;
+  }
+
+  const endpoint =
+    `https://generativelanguage.googleapis.com/${apiVersion}/models?key=` +
+    encodeURIComponent(apiKey);
+  const response = await fetch(endpoint);
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    const apiMessage =
+      data?.error?.message ||
+      `HTTP ${response.status} while listing models`;
+    throw new Error(apiMessage);
+  }
+
+  const allModels = Array.isArray(data?.models) ? data.models : [];
+  const generateModels = allModels
+    .filter((m) =>
+      Array.isArray(m.supportedGenerationMethods) &&
+      m.supportedGenerationMethods.includes('generateContent')
+    )
+    .map((m) => (m.name || '').replace(/^models\//, ''))
+    .filter(Boolean);
+
+  const preferredPresent = PREFERRED_MODELS.filter((m) => generateModels.includes(m));
+  const flashModels = generateModels.filter((m) => m.includes('flash'));
+  const otherModels = generateModels.filter((m) => !m.includes('flash')).slice(0, 3);
+  const candidates = Array.from(new Set([...preferredPresent, ...flashModels, ...otherModels]));
+
+  if (!candidates.length) {
+    throw new Error(`No generateContent-capable models found on ${apiVersion}`);
+  }
+
+  modelCache.set(cacheKey, { timestamp: now, models: candidates });
+  return candidates;
+}
+
 async function askGemini(prompt) {
   if (!prompt || typeof prompt !== 'string' || !prompt.trim()) {
     throw new Error('Prompt must be a non-empty string');
@@ -65,8 +110,17 @@ async function askGemini(prompt) {
     const apiKey = getApiKey();
     let lastError = null;
 
-    for (const modelName of MODEL_FALLBACKS) {
-      for (const apiVersion of API_VERSIONS) {
+    for (const apiVersion of API_VERSIONS) {
+      let candidateModels = [];
+      try {
+        candidateModels = await getCandidateModels(apiKey, apiVersion);
+      } catch (listError) {
+        lastError = listError;
+        console.warn(`Gemini model list failed for ${apiVersion}:`, listError.message);
+        continue;
+      }
+
+      for (const modelName of candidateModels) {
         try {
           const text = await callGemini(modelName, apiVersion, prompt, apiKey);
           console.log(`Gemini response (${apiVersion}/${modelName}):`, text);
