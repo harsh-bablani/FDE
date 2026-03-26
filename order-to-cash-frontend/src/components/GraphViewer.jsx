@@ -13,16 +13,33 @@ const NODE_COLORS = {
 
 function GraphViewer({ graphData, onNodeClick, selectedNode }) {
   const fgRef = useRef();
-  const [dimensions, setDimensions] = useState({ width: window.innerWidth, height: window.innerHeight - 60 });
+  const containerRef = useRef(null);
+  const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   
   // Highlight tracking
   const [highlightNodes, setHighlightNodes] = useState(new Set());
   const [highlightLinks, setHighlightLinks] = useState(new Set());
 
   useEffect(() => {
-    const handleResize = () => setDimensions({ width: window.innerWidth, height: window.innerHeight - 60 });
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    if (!containerRef.current) return undefined;
+
+    const updateSize = () => {
+      const rect = containerRef.current.getBoundingClientRect();
+      setDimensions({
+        width: Math.max(320, Math.floor(rect.width)),
+        height: Math.max(320, Math.floor(rect.height))
+      });
+    };
+
+    updateSize();
+    const observer = new ResizeObserver(updateSize);
+    observer.observe(containerRef.current);
+    window.addEventListener('resize', updateSize);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', updateSize);
+    };
   }, []);
 
   // Compute graph traversal indexing to quickly find connected paths
@@ -138,34 +155,38 @@ function GraphViewer({ graphData, onNodeClick, selectedNode }) {
   }, []);
 
   return (
-    <ForceGraph2D
-      ref={fgRef}
-      width={dimensions.width}
-      height={dimensions.height}
-      graphData={graphData}
-      nodeCanvasObject={drawNode}
-      nodePointerAreaPaint={drawPointerArea}
-      onNodeClick={(node) => {
-        fgRef.current.centerAt(node.x, node.y, 1000);
-        fgRef.current.zoom(4, 2000); // Zoom in but not too close (4 instead of 8)
-        onNodeClick(node);
-      }}
-      
-      // Path fading for edges
-      linkColor={link => (highlightLinks.size === 0 || highlightLinks.has(link)) ? '#94a3b8' : 'rgba(148, 163, 184, 0.1)'}
-      linkWidth={link => (highlightLinks.has(link) ? 2 : 1)}
-      
-      // Directional Flow (DAG Left to Right)
-      dagMode="lr"
-      dagLevelDistance={80} // Spacing between flow steps
-      
-      linkDirectionalArrowLength={4}
-      linkDirectionalArrowRelPos={1}
-      
-      // Node physics adjustment to allow breathing room
-      d3VelocityDecay={0.3}
-      cooldownTicks={100}
-    />
+    <div ref={containerRef} className="graph-canvas">
+      {dimensions.width > 0 && dimensions.height > 0 && (
+        <ForceGraph2D
+          ref={fgRef}
+          width={dimensions.width}
+          height={dimensions.height}
+          graphData={graphData}
+          nodeCanvasObject={drawNode}
+          nodePointerAreaPaint={drawPointerArea}
+          onNodeClick={(node) => {
+            fgRef.current.centerAt(node.x, node.y, 1000);
+            fgRef.current.zoom(4, 2000); // Zoom in but not too close (4 instead of 8)
+            onNodeClick(node);
+          }}
+          
+          // Path fading for edges
+          linkColor={link => (highlightLinks.size === 0 || highlightLinks.has(link)) ? '#94a3b8' : 'rgba(148, 163, 184, 0.1)'}
+          linkWidth={link => (highlightLinks.has(link) ? 2 : 1)}
+          
+          // Directional Flow (DAG Left to Right)
+          dagMode="lr"
+          dagLevelDistance={80} // Spacing between flow steps
+          
+          linkDirectionalArrowLength={4}
+          linkDirectionalArrowRelPos={1}
+          
+          // Node physics adjustment to allow breathing room
+          d3VelocityDecay={0.3}
+          cooldownTicks={100}
+        />
+      )}
+    </div>
   );
 }
 

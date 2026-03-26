@@ -9,14 +9,15 @@
 body {
   margin: 0;
   padding: 0;
-  width: 100vw;
-  height: 100vh;
+  width: 100%;
+  min-height: 100vh;
   overflow: hidden;
 }
 
 .app-container {
   display: flex;
   flex-direction: column;
+  min-height: 100vh;
   height: 100vh;
 }
 
@@ -25,10 +26,11 @@ body {
   padding: 0.5rem 1.5rem;
   box-shadow: 0 1px 3px rgba(0,0,0,0.1);
   z-index: 10;
-  height: 60px;
+  min-height: 60px;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 0.75rem;
 }
 
 .app-header h1 {
@@ -40,6 +42,7 @@ body {
 .search-bar {
   display: flex;
   gap: 0.5rem;
+  align-items: center;
 }
 
 .search-bar input {
@@ -96,6 +99,12 @@ body {
 .graph-container {
   flex: 1;
   background-color: #f1f5f9;
+  min-height: 320px;
+}
+
+.graph-canvas {
+  width: 100%;
+  height: 100%;
 }
 
 .side-panel {
@@ -170,6 +179,122 @@ body {
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0,0,0,0.15);
   overflow: hidden;
+}
+
+@media (max-width: 1024px) {
+  .app-header {
+    padding: 0.5rem 1rem;
+  }
+
+  .app-header h1 {
+    font-size: 1.05rem;
+  }
+
+  .search-bar input {
+    width: 180px;
+  }
+
+  .chat-container {
+    width: 280px;
+    max-height: 420px;
+  }
+
+  .chat-panel {
+    height: 400px;
+  }
+
+  .side-panel {
+    width: 300px;
+    right: 12px;
+    top: 12px;
+    max-height: calc(100vh - 92px);
+  }
+}
+
+@media (max-width: 768px) {
+  body {
+    overflow: auto;
+  }
+
+  .app-container {
+    height: auto;
+    min-height: 100vh;
+  }
+
+  .app-header {
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: center;
+    padding: 0.6rem 0.75rem;
+  }
+
+  .app-header h1 {
+    font-size: 1rem;
+    text-align: center;
+  }
+
+  .search-bar {
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+
+  .search-bar input {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  .search-bar button {
+    flex: 1;
+    min-width: 120px;
+    padding: 0.55rem 0.6rem;
+  }
+
+  .main-content {
+    flex-direction: column;
+    overflow: visible;
+    padding: 0;
+    gap: 0.5rem;
+  }
+
+  .graph-container {
+    min-height: 52vh;
+    height: 52vh;
+  }
+
+  .side-panel {
+    position: fixed;
+    top: auto;
+    left: 10px;
+    right: 10px;
+    bottom: 10px;
+    width: auto;
+    max-height: 55vh;
+    z-index: 30;
+  }
+
+  .chat-container {
+    position: static;
+    width: 100%;
+    max-height: none;
+    padding: 0 0.75rem 0.75rem;
+    box-sizing: border-box;
+  }
+
+  .chat-panel {
+    height: 36vh;
+    min-height: 280px;
+    max-height: 420px;
+    border-radius: 10px;
+  }
+
+  .loading,
+  .error {
+    width: calc(100% - 2rem);
+    box-sizing: border-box;
+    text-align: center;
+  }
 }
 
 .chat-panel .panel-header {
